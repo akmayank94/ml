@@ -1,0 +1,111 @@
+# -------------------------------
+# Step 1: Create Dataset with Gaussian Noise
+# -------------------------------
+X_raw = np.array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]).reshape(-1, 1)
+y = np.array([45000, 50000, 60000, 80000, 110000, 150000,
+              200000, 300000, 500000, 1000000]).reshape(-1, 1)
+
+# Add Gaussian noise to target variable
+noise_factor = 0.1
+noise = np.random.normal(0, noise_factor, y.shape)
+y_noisy = y + noise  # Use y_noisy for training
+
+# -------------------------------
+# Step 2: Generate Polynomial Features
+# -------------------------------
+degree = 4
+X_poly = np.ones((X_raw.shape[0], 1))  # bias term
+for d in range(1, degree + 1):
+    X_poly = np.hstack((X_poly, X_raw ** d))
+
+# Normalize features (except bias)
+scaler = StandardScaler()
+X_poly[:, 1:] = scaler.fit_transform(X_poly[:, 1:])
+
+# -------------------------------
+# Step 3: Train-Test Split (80/20)
+# -------------------------------
+split_index = int(0.8 * len(X_poly))
+X_train, X_test = X_poly[:split_index], X_poly[split_index:]
+y_train, y_test = y_noisy[:split_index], y_noisy[split_index:]
+
+# -------------------------------
+# Step 4: Gradient Descent for Polynomial Regression
+# -------------------------------
+# Hyperparameters
+learning_rate = 0.01
+iterations = 1000
+m = len(y_train)
+theta = np.zeros((X_train.shape[1], 1))
+
+# Gradient Descent
+for i in range(iterations):
+    predictions = X_train @ theta
+    errors = predictions - y_train
+    gradients = (2/m) * X_train.T @ errors
+    theta -= learning_rate * gradients
+
+# -------------------------------
+# Step 5: Predict and Evaluate
+# -------------------------------
+y_pred = X_test @ theta
+
+mse = np.mean((y_test - y_pred) ** 2)
+r2 = 1 - (np.sum((y_test - y_pred) ** 2) / np.sum((y_test - np.mean(y_test)) ** 2))
+
+print("\n========== Evaluation on Test Set ==========")
+print(f"Mean Squared Error (MSE)     : {mse:.2f}")
+print(f"R² Score (Coefficient of Determination): {r2:.4f}")
+
+# -------------------------------
+# Step 6: 5-Fold Cross Validation (using Gradient Descent)
+# -------------------------------
+kf = KFold(n_splits=5, shuffle=True, random_state=42)
+cv_mse, cv_r2 = [], []
+
+for train_index, val_index in kf.split(X_poly):
+    X_ktrain, X_kval = X_poly[train_index], X_poly[val_index]
+    y_ktrain, y_kval = y_noisy[train_index], y_noisy[val_index]
+
+    # Initialize theta for each fold
+    theta_k = np.zeros((X_ktrain.shape[1], 1))
+    
+    # Gradient Descent
+    for i in range(iterations):
+        predictions = X_ktrain @ theta_k
+        errors = predictions - y_ktrain
+        gradients = (2/m) * X_ktrain.T @ errors
+        theta_k -= learning_rate * gradients
+    
+    y_kpred = X_kval @ theta_k
+
+    mse_k = np.mean((y_kval - y_kpred) ** 2)
+    r2_k = 1 - (np.sum((y_kval - y_kpred) ** 2) / np.sum((y_kval - np.mean(y_kval)) ** 2))
+
+    cv_mse.append(mse_k)
+    cv_r2.append(r2_k)
+
+print("\n========== 5-Fold Cross Validation ==========")
+print(f"Average MSE across folds     : {np.mean(cv_mse):.2f}")
+print(f"Average R² Score across folds: {np.mean(cv_r2):.4f}")
+
+# -------------------------------
+# Step 7: Visualization
+# -------------------------------
+X_smooth = np.linspace(min(X_raw), max(X_raw), 200).reshape(-1, 1)
+X_smooth_poly = np.ones((X_smooth.shape[0], 1))
+for d in range(1, degree + 1):
+    X_smooth_poly = np.hstack((X_smooth_poly, X_smooth ** d))
+X_smooth_poly[:, 1:] = scaler.transform(X_smooth_poly[:, 1:])
+y_smooth_pred = X_smooth_poly @ theta
+
+plt.figure(figsize=(8, 5))
+plt.scatter(X_raw, y_noisy, color='red', label='Actual Data', edgecolors='k')
+plt.plot(X_smooth, y_smooth_pred, color='blue', linewidth=2, label='Polynomial Fit')
+plt.title("Polynomial Regression (Degree 4) with Gaussian Noise")
+plt.xlabel("Position Level")
+plt.ylabel("Salary")
+plt.legend()
+plt.grid(True)
+plt.tight_layout()
+plt.show()

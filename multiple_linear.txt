@@ -1,0 +1,128 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.model_selection import KFold
+from sklearn.preprocessing import StandardScaler
+
+# -------------------------------
+# Step 1: Load and Prepare Dataset
+# -------------------------------
+url = "http://archive.ics.uci.edu/ml/machine-learning-databases/auto-mpg/auto-mpg.data"
+columns = ["mpg", "cylinders", "displacement", "horsepower", "weight",
+           "acceleration", "model_year", "origin", "car_name"]
+
+data = pd.read_csv(url, names=columns, delim_whitespace=True, na_values='?')
+data.dropna(inplace=True)
+
+X = data.drop(columns=["mpg", "car_name"]).values
+y = data["mpg"].values.reshape(-1, 1)
+
+# Normalize features
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+
+# Add bias term
+X_scaled = np.c_[np.ones((X_scaled.shape[0], 1)), X_scaled]
+
+# -------------------------------
+# Step 2: Gaussian Noise Function
+# -------------------------------
+def add_gaussian_noise(X, mean=0.0, std_dev=0.1):
+    noise = np.random.normal(mean, std_dev, size=X.shape)
+    return X + noise
+
+# Add noise to feature matrix
+X_noisy = add_gaussian_noise(X_scaled)
+
+# -------------------------------
+# Step 3: Train-Test Split (80/20)
+# -------------------------------
+split_index = int(0.8 * len(X_noisy))
+X_train, X_test = X_noisy[:split_index], X_noisy[split_index:]
+y_train, y_test = y[:split_index], y[split_index:]
+
+# -------------------------------
+# Step 4: Normal Equation Training
+# -------------------------------
+theta_closed = np.linalg.inv(X_train.T @ X_train) @ X_train.T @ y_train
+y_pred_closed = X_test @ theta_closed
+
+mse_closed = np.mean((y_test - y_pred_closed) ** 2)
+r2_closed = 1 - (np.sum((y_test - y_pred_closed) ** 2) / np.sum((y_test - np.mean(y_test)) ** 2))
+
+print("=== Normal Equation ===")
+print(f"MSE: {mse_closed:.4f}, R²: {r2_closed:.4f}")
+
+# -------------------------------
+# Step 5: Gradient Descent Implementation
+# -------------------------------
+def gradient_descent(X, y, lr=0.01, epochs=1000):
+    m, n = X.shape
+    theta = np.zeros((n, 1))
+    loss_history = []
+
+    for _ in range(epochs):
+        y_pred = X @ theta
+        error = y_pred - y
+        cost = np.mean(error ** 2)
+        loss_history.append(cost)
+        gradient = (2/m) * X.T @ error
+        theta -= lr * gradient
+
+    return theta, loss_history
+
+theta_gd, loss_history = gradient_descent(X_train, y_train, lr=0.01, epochs=1000)
+y_pred_gd = X_test @ theta_gd
+
+mse_gd = np.mean((y_test - y_pred_gd) ** 2)
+r2_gd = 1 - (np.sum((y_test - y_pred_gd) ** 2) / np.sum((y_test - np.mean(y_test)) ** 2))
+
+print("\n=== Gradient Descent ===")
+print(f"MSE: {mse_gd:.4f}, R²: {r2_gd:.4f}")
+
+# -------------------------------
+# Step 6: 5-Fold Cross Validation (Normal Equation)
+# -------------------------------
+kf = KFold(n_splits=5, shuffle=True, random_state=42)
+cv_mse, cv_r2 = [], []
+
+for train_index, val_index in kf.split(X_scaled):
+    X_ktrain, X_kval = X_scaled[train_index], X_scaled[val_index]
+    y_ktrain, y_kval = y[train_index], y[val_index]
+
+    theta_k = np.linalg.inv(X_ktrain.T @ X_ktrain) @ X_ktrain.T @ y_ktrain
+    y_kpred = X_kval @ theta_k
+
+    mse_k = np.mean((y_kval - y_kpred) ** 2)
+    r2_k = 1 - (np.sum((y_kval - y_kpred) ** 2) / np.sum((y_kval - np.mean(y_kval)) ** 2))
+
+    cv_mse.append(mse_k)
+    cv_r2.append(r2_k)
+
+print("\n=== 5-Fold CV (Normal Equation) ===")
+print(f"Avg MSE: {np.mean(cv_mse):.4f}, Avg R²: {np.mean(cv_r2):.4f}")
+
+# -------------------------------
+# Step 7: Plots
+# -------------------------------
+
+# A. Actual vs Predicted (Gradient Descent)
+plt.figure(figsize=(8, 5))
+plt.scatter(y_test, y_pred_gd, color='teal', edgecolors='k', alpha=0.7)
+plt.plot([min(y_test), max(y_test)], [min(y_test), max(y_test)], 'r--')
+plt.xlabel("Actual MPG")
+plt.ylabel("Predicted MPG")
+plt.title("Actual vs Predicted MPG (Gradient Descent)")
+plt.grid(True)
+plt.tight_layout()
+plt.show()
+
+# B. Loss Curve
+plt.figure(figsize=(7, 4))
+plt.plot(loss_history, color='purple')
+plt.title("Loss over Epochs (Gradient Descent)")
+plt.xlabel("Epoch")
+plt.ylabel("MSE Loss")
+plt.grid(True)
+plt.tight_layout()
+plt.show()

@@ -1,0 +1,102 @@
+import numpy as np
+import pandas as pd
+from sklearn.datasets import load_iris
+from sklearn.model_selection import train_test_split
+
+# 1. Load Dataset
+iris = load_iris()
+X = iris.data
+y = iris.target
+
+# 2. Train-Test Split
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.3, random_state=42
+)
+
+# 3. Add Gaussian Noise to Training Data
+def add_gaussian_noise(X, mean=0, std_dev=0.1):
+    noise = np.random.normal(mean, std_dev, X.shape)
+    return X + noise
+
+X_train_noisy = add_gaussian_noise(X_train)
+
+# 4. Calculate mean, std, and priors for each class
+def summarize_by_class(X, y):
+    summaries = {}
+    for class_value in np.unique(y):
+        X_class = X[y == class_value]
+        summaries[class_value] = {
+            "mean": X_class.mean(axis=0),
+            "std": X_class.std(axis=0, ddof=1),
+            "prior": len(X_class) / len(X)
+        }
+    return summaries
+
+# 5. Gaussian probability density function
+def gaussian_prob(x, mean, std):
+    exponent = np.exp(-((x - mean) ** 2) / (2 * std ** 2))
+    return (1 / (np.sqrt(2 * np.pi) * std)) * exponent
+
+# 6. Predict a single instance
+def predict_instance(instance, summaries):
+    probabilities = {}
+    for class_value, stats in summaries.items():
+        prior = stats["prior"]
+        likelihood = 1.0
+        for i in range(len(instance)):
+            mean = stats["mean"][i]
+            std = stats["std"][i]
+            likelihood *= gaussian_prob(instance[i], mean, std)
+        probabilities[class_value] = prior * likelihood
+    return max(probabilities, key=probabilities.get)
+
+# 7. Predict all instances
+def predict(X_test, summaries):
+    return [predict_instance(x, summaries) for x in X_test]
+
+# 8. Evaluation
+def compute_metrics(y_true, y_pred):
+    labels = np.unique(y_true)
+    metrics = {}
+
+    for label in labels:
+        tp = np.sum((y_pred == label) & (y_true == label))
+        fp = np.sum((y_pred == label) & (y_true != label))
+        fn = np.sum((y_pred != label) & (y_true == label))
+        tn = np.sum((y_pred != label) & (y_true != label))
+
+        precision = tp / (tp + fp) if (tp + fp) != 0 else 0
+        recall = tp / (tp + fn) if (tp + fn) != 0 else 0
+        f1 = (2 * precision * recall) / (precision + recall) if (precision + recall) != 0 else 0
+
+        metrics[label] = {
+            "TP": tp, "FP": fp, "FN": fn, "TN": tn,
+            "Precision": round(precision, 4),
+            "Recall": round(recall, 4),
+            "F1-Score": round(f1, 4)
+        }
+
+    macro_precision = np.mean([m["Precision"] for m in metrics.values()])
+    macro_recall = np.mean([m["Recall"] for m in metrics.values()])
+    macro_f1 = np.mean([m["F1-Score"] for m in metrics.values()])
+    accuracy = np.sum(y_true == y_pred) / len(y_true)
+
+    # Print Results
+    print("\nConfusion Matrix:")
+    print(pd.crosstab(y_true, y_pred, rownames=['Actual'], colnames=['Predicted'], margins=True))
+
+    print("\nClass-wise Metrics:")
+    for label, m in metrics.items():
+        print(f"Class {label}: TP={m['TP']}, FP={m['FP']}, FN={m['FN']}, TN={m['TN']}, "
+              f"Precision={m['Precision']}, Recall={m['Recall']}, F1={m['F1-Score']}")
+
+    print("\nOverall Evaluation:")
+    print(f"Accuracy: {round(accuracy, 4)}")
+    print(f"Macro Precision: {round(macro_precision, 4)}")
+    print(f"Macro Recall: {round(macro_recall, 4)}")
+    print(f"Macro F1-Score: {round(macro_f1, 4)}")
+
+# 9. Run the model
+summaries = summarize_by_class(X_train_noisy, y_train)
+y_pred = predict(X_test, summaries)
+compute_metrics(np.array(y_test), np.array(y_pred))

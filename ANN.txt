@@ -1,0 +1,183 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split, KFold
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
+
+# -------------------------------
+# Step 1: Load Breast Cancer Wisconsin Dataset
+# -------------------------------
+url = "https://archive.ics.uci.edu/ml/machine-learning-databases/breast-cancer-wisconsin/wdbc.data"
+
+# Column names as per the dataset's description
+column_names = ['ID', 'Diagnosis'] + [f'feature_{i}' for i in range(1, 31)]
+
+# Load the dataset
+data = pd.read_csv(url, header=None, names=column_names)
+
+# Drop the 'ID' column as it's not a feature
+data.drop('ID', axis=1, inplace=True)
+
+# Encode target labels: 'M' = 1 (Malignant), 'B' = 0 (Benign)
+data['Diagnosis'] = data['Diagnosis'].map({'M': 1, 'B': 0})
+
+# Features and target variable
+X = data.drop('Diagnosis', axis=1)
+y = data['Diagnosis'].values
+
+# -------------------------------
+# Step 2: Add Gaussian Noise to Features
+# -------------------------------
+def add_gaussian_noise(X, mean=0, stddev=0.1):
+    noise = np.random.normal(mean, stddev, X.shape)
+    return X + noise
+
+X_noisy = add_gaussian_noise(X.values)
+
+# -------------------------------
+# Step 3: Normalize Features
+# -------------------------------
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X_noisy)
+
+# Split into training and testing sets (80/20)
+X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, random_state=42)
+
+# -------------------------------
+# Step 4: Initialize Weights and Biases for ANN (Scratch)
+# -------------------------------
+np.random.seed(42)
+input_size = X_train.shape[1]  # Number of features
+hidden_size = 16  # Size of hidden layer
+output_size = 1  # Binary classification
+
+# Random initialization of weights and biases
+W1 = np.random.randn(input_size, hidden_size) * 0.01
+b1 = np.zeros((1, hidden_size))
+W2 = np.random.randn(hidden_size, output_size) * 0.01
+b2 = np.zeros((1, output_size))
+
+# -------------------------------
+# Step 5: Define Activation Functions
+# -------------------------------
+def relu(x):
+    return np.maximum(0, x)
+
+def sigmoid(x):
+    return 1 / (1 + np.exp(-x))
+
+def compute_cost(y, y_pred):
+    m = y.shape[0]
+    cost = -np.sum(y * np.log(y_pred) + (1 - y) * np.log(1 - y_pred)) / m
+    return cost
+
+# -------------------------------
+# Step 6: Forward and Backpropagation Functions
+# -------------------------------
+# Forward propagation
+def forward_propagation(X):
+    Z1 = np.dot(X, W1) + b1
+    A1 = relu(Z1)
+    Z2 = np.dot(A1, W2) + b2
+    A2 = sigmoid(Z2)
+    return A1, A2
+
+# Backpropagation
+def backward_propagation(X, y, A1, A2, learning_rate=0.01):
+    m = X.shape[0]
+    
+    # Compute gradients
+    dZ2 = A2 - y
+    dW2 = np.dot(A1.T, dZ2) / m
+    db2 = np.sum(dZ2, axis=0, keepdims=True) / m
+    
+    dZ1 = np.dot(dZ2, W2.T) * (A1 > 0)  # ReLU derivative
+    dW1 = np.dot(X.T, dZ1) / m
+    db1 = np.sum(dZ1, axis=0, keepdims=True) / m
+    
+    # Update parameters
+    global W1, b1, W2, b2
+    W1 -= learning_rate * dW1
+    b1 -= learning_rate * db1
+    W2 -= learning_rate * dW2
+    b2 -= learning_rate * db2
+
+# -------------------------------
+# Step 7: Train the Model Using Gradient Descent
+# -------------------------------
+epochs = 100
+learning_rate = 0.01
+for epoch in range(epochs):
+    # Forward pass
+    A1, A2 = forward_propagation(X_train)
+    
+    # Compute cost
+    cost = compute_cost(y_train, A2)
+    
+    # Backward pass
+    backward_propagation(X_train, y_train, A1, A2, learning_rate)
+    
+    # Print the cost every 10 epochs
+    if epoch % 10 == 0:
+        print(f"Epoch {epoch}, Cost: {cost}")
+
+# -------------------------------
+# Step 8: Evaluate the Model
+# -------------------------------
+A1_test, A2_test = forward_propagation(X_test)
+y_pred = (A2_test > 0.5).astype(int)
+
+# Accuracy
+accuracy = accuracy_score(y_test, y_pred)
+print(f"\nAccuracy: {accuracy:.4f}")
+
+# Confusion Matrix
+conf_matrix = confusion_matrix(y_test, y_pred)
+print("\nConfusion Matrix:")
+print(conf_matrix)
+
+# Classification Report
+class_report = classification_report(y_test, y_pred)
+print("\nClassification Report:")
+print(class_report)
+
+# -------------------------------
+# Step 9: 5-Fold Cross Validation (Optional)
+# -------------------------------
+kf = KFold(n_splits=5, shuffle=True, random_state=42)
+cv_accuracy = []
+
+for train_index, val_index in kf.split(X_scaled):
+    X_ktrain, X_kval = X_scaled[train_index], X_scaled[val_index]
+    y_ktrain, y_kval = y[train_index], y[val_index]
+
+    # Train the model on each fold
+    for epoch in range(epochs):
+        A1, A2 = forward_propagation(X_ktrain)
+        cost = compute_cost(y_ktrain, A2)
+        backward_propagation(X_ktrain, y_ktrain, A1, A2, learning_rate)
+    
+    # Evaluate on validation set
+    A1_kval, A2_kval = forward_propagation(X_kval)
+    y_kval_pred = (A2_kval > 0.5).astype(int)
+    accuracy_k = accuracy_score(y_kval, y_kval_pred)
+    cv_accuracy.append(accuracy_k)
+
+print("\n========== 5-Fold Cross Validation ==========")
+print(f"Average Accuracy for ANN: {np.mean(cv_accuracy):.4f}")
+
+# -------------------------------
+# Step 10: Visualization of Training History
+# -------------------------------
+plt.figure(figsize=(12, 5))
+
+# Plotting cost over epochs
+plt.plot(range(epochs), [compute_cost(y_train, forward_propagation(X_train)[1]) for _ in range(epochs)], label='Training Cost')
+plt.title('Training Cost Over Epochs')
+plt.xlabel('Epoch')
+plt.ylabel('Cost')
+plt.grid(True)
+plt.legend()
+
+plt.show()

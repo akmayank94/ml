@@ -1,0 +1,80 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split, KFold
+from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
+from sklearn.tree import DecisionTreeClassifier, plot_tree
+from sklearn.preprocessing import LabelEncoder
+
+# -------------------------------
+# Step 1: Load and Preprocess Iris Dataset
+# -------------------------------
+url = "https://archive.ics.uci.edu/ml/machine-learning-databases/iris/iris.data"
+column_names = ['sepal_length', 'sepal_width', 'petal_length', 'petal_width', 'class']
+data = pd.read_csv(url, header=None, names=column_names)
+
+# Encode class labels to numeric
+label_encoder = LabelEncoder()
+data['class'] = label_encoder.fit_transform(data['class'])
+
+X = data.drop('class', axis=1).values
+y = data['class'].values
+
+# -------------------------------
+# Step 2: Add Gaussian Noise to Features
+# -------------------------------
+def add_gaussian_noise(X, mean=0.0, std=0.1):
+    noise = np.random.normal(mean, std, X.shape)
+    return X + noise
+
+X_noisy = add_gaussian_noise(X)
+
+# -------------------------------
+# Step 3: Train/Test Split
+# -------------------------------
+X_train, X_test, y_train, y_test = train_test_split(X_noisy, y, test_size=0.2, random_state=42)
+
+# -------------------------------
+# Step 4: Train the Decision Tree Classifier
+# -------------------------------
+clf = DecisionTreeClassifier(criterion='entropy', max_depth=3, random_state=42)
+clf.fit(X_train, y_train)
+
+# -------------------------------
+# Step 5: Evaluation
+# -------------------------------
+y_pred = clf.predict(X_test)
+
+print("\n========== Decision Tree Classifier Evaluation ==========")
+print(f"Accuracy: {accuracy_score(y_test, y_pred):.4f}")
+print("\nConfusion Matrix:")
+print(confusion_matrix(y_test, y_pred))
+print("\nClassification Report:")
+print(classification_report(y_test, y_pred))
+
+# -------------------------------
+# Step 6: 5-Fold Cross Validation
+# -------------------------------
+kf = KFold(n_splits=5, shuffle=True, random_state=42)
+cv_scores = []
+
+for train_index, val_index in kf.split(X_noisy):
+    X_ktrain, X_kval = X_noisy[train_index], X_noisy[val_index]
+    y_ktrain, y_kval = y[train_index], y[val_index]
+
+    clf_cv = DecisionTreeClassifier(criterion='entropy', max_depth=3, random_state=42)
+    clf_cv.fit(X_ktrain, y_ktrain)
+    y_kpred = clf_cv.predict(X_kval)
+    acc = accuracy_score(y_kval, y_kpred)
+    cv_scores.append(acc)
+
+print("\n========== 5-Fold Cross Validation ==========")
+print(f"Average CV Accuracy: {np.mean(cv_scores):.4f}")
+
+# -------------------------------
+# Step 7: Visualize Decision Tree
+# -------------------------------
+plt.figure(figsize=(12, 8))
+plot_tree(clf, feature_names=column_names[:-1], class_names=label_encoder.classes_, filled=True)
+plt.title("Decision Tree Visualization (Entropy, max_depth=3) with Gaussian Noise")
+plt.show()

@@ -1,0 +1,106 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split, KFold
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
+from collections import Counter
+from math import sqrt
+
+# -------------------------------
+# Step 1: Load Iris Dataset from UCI
+# -------------------------------
+url = "https://archive.ics.uci.edu/ml/machine-learning-databases/iris/iris.data"
+column_names = ['sepal_length', 'sepal_width', 'petal_length', 'petal_width', 'class']
+data = pd.read_csv(url, header=None, names=column_names)
+
+# Map class labels to integers
+class_map = {'Iris-setosa': 0, 'Iris-versicolor': 1, 'Iris-virginica': 2}
+data['class'] = data['class'].map(class_map)
+
+# Features and target
+X = data.drop('class', axis=1).values
+y = data['class'].values
+
+# -------------------------------
+# Step 2: Add Gaussian Noise to Features
+# -------------------------------
+def add_gaussian_noise(X, mean=0.0, std=0.1):
+    noise = np.random.normal(mean, std, X.shape)
+    return X + noise
+
+X_noisy = add_gaussian_noise(X)
+
+# Normalize features
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X_noisy)
+
+# -------------------------------
+# Step 3: Manual K-NN Implementation
+# -------------------------------
+def euclidean_distance(x1, x2):
+    return sqrt(np.sum((x1 - x2) ** 2))
+
+def knn_predict(X_train, y_train, x_test, k=5):
+    distances = [euclidean_distance(x_test, x) for x in X_train]
+    k_indices = np.argsort(distances)[:k]
+    k_nearest_labels = [y_train[i] for i in k_indices]
+    most_common = Counter(k_nearest_labels).most_common(1)
+    return most_common[0][0]
+
+# -------------------------------
+# Step 4: Train/Test Split
+# -------------------------------
+X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, random_state=42)
+
+# Predict on test set
+y_pred = [knn_predict(X_train, y_train, x, k=5) for x in X_test]
+
+# -------------------------------
+# Step 5: Evaluation
+# -------------------------------
+acc = accuracy_score(y_test, y_pred)
+conf_matrix = confusion_matrix(y_test, y_pred)
+report = classification_report(y_test, y_pred)
+
+print("\n========== K-NN Classifier Evaluation ==========")
+print(f"Accuracy: {acc:.4f}")
+print("\nConfusion Matrix:")
+print(conf_matrix)
+print("\nClassification Report:")
+print(report)
+
+# -------------------------------
+# Step 6: 5-Fold Cross Validation
+# -------------------------------
+kf = KFold(n_splits=5, shuffle=True, random_state=42)
+cv_scores = []
+
+for train_index, val_index in kf.split(X_scaled):
+    X_ktrain, X_kval = X_scaled[train_index], X_scaled[val_index]
+    y_ktrain, y_kval = y[train_index], y[val_index]
+
+    y_kpred = [knn_predict(X_ktrain, y_ktrain, x, k=5) for x in X_kval]
+    acc_k = accuracy_score(y_kval, y_kpred)
+    cv_scores.append(acc_k)
+
+print("\n========== 5-Fold Cross Validation ==========")
+print(f"Average CV Accuracy: {np.mean(cv_scores):.4f}")
+
+# -------------------------------
+# Step 7: Visual Output (2D Projection)
+# -------------------------------
+plt.figure(figsize=(8, 6))
+for class_value in np.unique(y_test):
+    plt.scatter(
+        X_test[y_test == class_value][:, 0],
+        X_test[y_test == class_value][:, 1],
+        label=f"Class {class_value}",
+        alpha=0.7
+    )
+plt.title("K-NN Test Set Visualization (First 2 Features with Gaussian Noise)")
+plt.xlabel("Feature 1 (Normalized)")
+plt.ylabel("Feature 2 (Normalized)")
+plt.legend()
+plt.grid(True)
+plt.show()

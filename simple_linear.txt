@@ -1,0 +1,136 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split, KFold
+
+# ----------------------------
+# 0. Load Dataset
+# ----------------------------
+data = {
+    'YearsExperience': [1.1, 1.3, 1.5, 2.0, 2.2, 2.9, 3.0, 3.2, 3.2, 3.7,
+                        3.9, 4.0, 4.0, 4.1, 4.5, 4.9, 5.1, 5.3, 5.9, 6.0,
+                        6.8, 7.1, 7.9, 8.2, 8.7, 9.0, 9.5, 9.6, 10.3, 10.5],
+    'Salary': [39343, 46205, 37731, 43525, 39891, 56642, 60150, 54445, 64445, 57189,
+               63218, 55794, 56957, 57081, 61111, 67938, 66029, 83088, 81363, 93940,
+               91738, 98273, 101302, 113812, 109431, 105582, 116969, 112635, 122391, 121872]
+}
+df = pd.DataFrame(data)
+X = np.array(df['YearsExperience'])
+y = np.array(df['Salary'])
+
+# ----------------------------
+# 1. Basic Linear Regression
+# ----------------------------
+
+def estimate_coefficients(x, y):
+    mean_x = np.mean(x)
+    mean_y = np.mean(y)
+    b1 = np.sum((x - mean_x) * (y - mean_y)) / np.sum((x - mean_x) ** 2)
+    b0 = mean_y - b1 * mean_x
+    return b0, b1
+
+def predict(x, b0, b1):
+    return b0 + b1 * x
+
+def mse(y_true, y_pred):
+    return np.mean((y_true - y_pred) ** 2)
+
+def r2_score(y_true, y_pred):
+    ss_total = np.sum((y_true - np.mean(y_true)) ** 2)
+    ss_res = np.sum((y_true - y_pred) ** 2)
+    return 1 - (ss_res / ss_total)
+
+# ----------------------------
+# 2. Train-Test Split Evaluation
+# ----------------------------
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+b0, b1 = estimate_coefficients(X_train, y_train)
+y_pred_test = predict(X_test, b0, b1)
+
+print("=== Train-Test Split Evaluation ===")
+print(f"Closed-Form Intercept: {b0:.2f}, Slope: {b1:.2f}")
+print(f"MSE: {mse(y_test, y_pred_test):.2f}")
+print(f"R² Score: {r2_score(y_test, y_pred_test):.4f}")
+
+# ----------------------------
+# 3. K-Fold Cross-Validation
+# ----------------------------
+print("\n=== K-Fold Cross-Validation (k=5) ===")
+kf = KFold(n_splits=5, shuffle=True, random_state=1)
+mse_scores, r2_scores = [], []
+
+for train_idx, val_idx in kf.split(X):
+    X_tr, X_val = X[train_idx], X[val_idx]
+    y_tr, y_val = y[train_idx], y[val_idx]
+    b0, b1 = estimate_coefficients(X_tr, y_tr)
+    y_val_pred = predict(X_val, b0, b1)
+    mse_scores.append(mse(y_val, y_val_pred))
+    r2_scores.append(r2_score(y_val, y_val_pred))
+
+for i, (m, r) in enumerate(zip(mse_scores, r2_scores), 1):
+    print(f"Fold {i}: MSE = {m:.2f}, R² = {r:.4f}")
+print(f"\nAverage MSE: {np.mean(mse_scores):.2f}")
+print(f"Average R² Score: {np.mean(r2_scores):.4f}")
+
+# ----------------------------
+# 4. Gaussian Noise Function
+# ----------------------------
+def add_gaussian_noise(X, mean=0.0, std_dev=0.1):
+    noise = np.random.normal(mean, std_dev, size=X.shape)
+    return X + noise
+
+# ----------------------------
+# 5. Gradient Descent Implementation
+# ----------------------------
+def gradient_descent(x, y, learning_rate=0.01, epochs=1000):
+    b0, b1 = 0.0, 0.0
+    n = len(x)
+    loss_history = []
+
+    for _ in range(epochs):
+        y_pred = b0 + b1 * x
+        error = y - y_pred
+        cost = np.mean(error ** 2)
+        loss_history.append(cost)
+        b0 -= learning_rate * (-2 * np.mean(error))
+        b1 -= learning_rate * (-2 * np.mean(error * x))
+
+    return b0, b1, loss_history
+
+# ----------------------------
+# 6. Train with Gradient Descent on Noisy Data
+# ----------------------------
+X_noisy = add_gaussian_noise(X)
+X_train_gd, X_test_gd, y_train_gd, y_test_gd = train_test_split(X_noisy, y, test_size=0.2, random_state=42)
+
+b0_gd, b1_gd, loss_history = gradient_descent(X_train_gd, y_train_gd)
+y_pred_gd = predict(X_test_gd, b0_gd, b1_gd)
+
+print("\n=== Gradient Descent Evaluation (Noisy Input) ===")
+print(f"GD Intercept: {b0_gd:.2f}, Slope: {b1_gd:.2f}")
+print(f"MSE: {mse(y_test_gd, y_pred_gd):.2f}")
+print(f"R² Score: {r2_score(y_test_gd, y_pred_gd):.4f}")
+
+# ----------------------------
+# 7. Plots
+# ----------------------------
+
+# A. Regression Line Plot
+plt.scatter(X_test, y_test, color='blue', label='Actual')
+plt.plot(X_test, y_pred_test, color='red', label='Predicted Line (Closed-Form)')
+plt.xlabel("Years of Experience")
+plt.ylabel("Salary")
+plt.title("Simple Linear Regression")
+plt.legend()
+plt.grid(True)
+plt.show()
+
+# B. Loss Curve
+plt.plot(loss_history)
+plt.title("Gradient Descent Loss over Epochs")
+plt.xlabel("Epochs")
+plt.ylabel("MSE Loss")
+plt.grid(True)
+plt.show()
+

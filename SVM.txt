@@ -1,0 +1,109 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.datasets import load_breast_cancer
+from sklearn.svm import SVC
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import (confusion_matrix, classification_report,
+                             roc_curve, roc_auc_score, accuracy_score,
+                             precision_score, recall_score, f1_score)
+
+# 1. Load dataset
+data = load_breast_cancer()
+X_full = pd.DataFrame(data.data, columns=data.feature_names)
+y = pd.Series(data.target)
+
+# 2. Select only two features for decision boundary plot
+X = X_full[["mean radius", "mean texture"]]
+
+# 3. Add Gaussian Noise
+def add_gaussian_noise(X, mean=0.0, std=0.3):
+    noise = np.random.normal(loc=mean, scale=std, size=X.shape)
+    return X + noise
+
+X_noisy = add_gaussian_noise(X)
+
+# 4. Train/test split
+X_train, X_test, y_train, y_test = train_test_split(X_noisy, y, test_size=0.2, random_state=42)
+
+# 5. Scale features
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train)
+X_test_scaled = scaler.transform(X_test)
+X_scaled = scaler.fit_transform(X_noisy)
+
+# 6. Train SVM
+svm_model = SVC(kernel='linear', probability=True, random_state=42)
+svm_model.fit(X_train_scaled, y_train)
+
+# 7. Predictions
+y_pred = svm_model.predict(X_test_scaled)
+y_prob = svm_model.predict_proba(X_test_scaled)[:, 1]
+
+# 8. Evaluation Metrics
+conf_matrix = confusion_matrix(y_test, y_pred)
+TN, FP, FN, TP = conf_matrix.ravel()
+
+accuracy = accuracy_score(y_test, y_pred)
+recall = recall_score(y_test, y_pred)
+precision = precision_score(y_test, y_pred)
+specificity = TN / (TN + FP)
+error_rate = (FP + FN) / (TP + TN + FP + FN)
+f1 = f1_score(y_test, y_pred)
+roc_auc = roc_auc_score(y_test, y_prob)
+
+# Print all metrics
+print("\n=== Classification Metrics ===")
+print(f"Accuracy     : {accuracy:.4f}")
+print(f"TP, TN, FP, FN: {TP}, {TN}, {FP}, {FN}")
+print(f"Recall       : {recall:.4f}")
+print(f"Specificity  : {specificity:.4f}")
+print(f"Precision    : {precision:.4f}")
+print(f"F1 Score     : {f1:.4f}")
+print(f"AUC Score    : {roc_auc:.4f}")
+print(f"Error Rate   : {error_rate:.4f}")
+
+# 9. Classification Report
+print("\n=== Classification Report ===")
+print(classification_report(y_test, y_pred))
+
+# 10. Confusion Matrix
+print("\n=== Confusion Matrix ===")
+print(conf_matrix)
+
+# 11. ROC Curve
+fpr, tpr, thresholds = roc_curve(y_test, y_prob)
+plt.figure(figsize=(8, 6))
+plt.plot(fpr, tpr, label=f"AUC = {roc_auc:.2f}", color='darkorange')
+plt.plot([0, 1], [0, 1], linestyle="--", color='gray')
+plt.title("ROC Curve - SVM with Gaussian Noise")
+plt.xlabel("False Positive Rate")
+plt.ylabel("True Positive Rate")
+plt.legend()
+plt.grid(True)
+plt.show()
+
+# 12. SVM Decision Boundary with Support Vectors
+h = 0.01
+x_min, x_max = X_train_scaled[:, 0].min() - 1, X_train_scaled[:, 0].max() + 1
+y_min, y_max = X_train_scaled[:, 1].min() - 1, X_train_scaled[:, 1].max() + 1
+xx, yy = np.meshgrid(np.arange(x_min, x_max, h),
+                     np.arange(y_min, y_max, h))
+Z = svm_model.predict(np.c_[xx.ravel(), yy.ravel()])
+Z = Z.reshape(xx.shape)
+
+plt.figure(figsize=(8, 6))
+plt.contourf(xx, yy, Z, alpha=0.3, cmap='coolwarm')
+sns.scatterplot(x=X_train_scaled[:, 0], y=X_train_scaled[:, 1],
+                hue=y_train, palette='Set1', edgecolor='k', s=60)
+plt.scatter(svm_model.support_vectors_[:, 0],
+            svm_model.support_vectors_[:, 1],
+            s=100, facecolors='none', edgecolors='black', label='Support Vectors')
+plt.title("SVM Decision Boundary with Support Vectors (Gaussian Noise)")
+plt.xlabel("Mean Radius (scaled)")
+plt.ylabel("Mean Texture (scaled)")
+plt.legend()
+plt.grid(True)
+plt.show()

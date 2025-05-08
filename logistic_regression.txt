@@ -1,0 +1,98 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import accuracy_score
+
+# -------------------------------
+# Step 1: Load Iris Dataset
+# -------------------------------
+url = "https://archive.ics.uci.edu/ml/machine-learning-databases/iris/iris.data"
+column_names = ["sepal_length", "sepal_width", "petal_length", "petal_width", "species"]
+data = pd.read_csv(url, header=None, names=column_names)
+
+# -------------------------------
+# Step 2: Data Preprocessing
+# -------------------------------
+# Encode target labels (species) into numeric values
+data["species"] = data["species"].map({"Iris-setosa": 0, "Iris-versicolor": 1, "Iris-virginica": 2})
+
+# Features and target variable
+X = data.drop(columns=["species"])
+y = data["species"].values
+
+# -------------------------------
+# Add Gaussian Noise to Features
+# -------------------------------
+noise_factor = 0.1  # Standard deviation of noise
+X_noisy = X + np.random.normal(0, noise_factor, X.shape)
+
+# -------------------------------
+# Sigmoid function
+# -------------------------------
+def sigmoid(z):
+    return 1 / (1 + np.exp(-z))
+
+# -------------------------------
+# Cost function (Binary Cross-Entropy)
+# -------------------------------
+def compute_cost(X, y, w):
+    m = len(y)
+    h = sigmoid(np.dot(X, w))
+    cost = (-1/m) * np.sum(y * np.log(h) + (1 - y) * np.log(1 - h))
+    return cost
+
+# -------------------------------
+# Gradient Descent
+# -------------------------------
+def gradient_descent(X, y, w, learning_rate=0.01, iterations=1000):
+    m = len(y)
+    cost_history = []
+
+    for i in range(iterations):
+        h = sigmoid(np.dot(X, w))
+        gradient = (1/m) * np.dot(X.T, (h - y))
+        w -= learning_rate * gradient
+        cost_history.append(compute_cost(X, y, w))
+
+    return w, cost_history
+
+# -------------------------------
+# Add intercept term to X (bias term)
+# -------------------------------
+X = np.c_[np.ones(X_noisy.shape[0]), X_noisy]  # Add intercept term
+
+# Convert to binary classification (Iris-versicolor vs. others)
+y = (y == 1).astype(int)
+
+# -------------------------------
+# Split data into training and testing sets (80/20)
+# -------------------------------
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Initialize weights (randomly)
+w_init = np.zeros(X_train.shape[1])
+
+# -------------------------------
+# Train Logistic Regression using Gradient Descent
+# -------------------------------
+w_opt, cost_history = gradient_descent(X_train, y_train, w_init, learning_rate=0.1, iterations=1000)
+
+# -------------------------------
+# Evaluate Model
+# -------------------------------
+y_pred = sigmoid(np.dot(X_test, w_opt)) >= 0.5
+accuracy = accuracy_score(y_test, y_pred)
+
+# Print results
+print(f"Accuracy from Gradient Descent: {accuracy:.4f}")
+
+# -------------------------------
+# Visualization of Cost Function Convergence
+# -------------------------------
+plt.plot(range(1000), cost_history)
+plt.xlabel("Iterations")
+plt.ylabel("Cost")
+plt.title("Cost Function Convergence")
+plt.show()

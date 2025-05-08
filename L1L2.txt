@@ -1,0 +1,106 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split, KFold
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import mean_squared_error, r2_score
+
+# -------------------------------
+# Step 1: Load Wine Quality Dataset
+# -------------------------------
+url = "https://archive.ics.uci.edu/ml/machine-learning-databases/wine-quality/winequality-red.csv"
+data = pd.read_csv(url, delimiter=";")
+
+# Features and target variable
+X = data.drop(columns=["quality"])
+y = data["quality"].values
+
+# -------------------------------
+# Step 2: Add Gaussian Noise
+# -------------------------------
+def add_gaussian_noise(X, noise_level=0.1):
+    noise = np.random.normal(0, noise_level, X.shape)
+    return X + noise
+
+X_noisy = add_gaussian_noise(X, noise_level=0.1)
+
+# -------------------------------
+# Step 3: Normalize Features
+# -------------------------------
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X_noisy)
+
+# Split into training and testing sets (80/20)
+X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2, random_state=42)
+
+# -------------------------------
+# Step 4: Implement Gradient Descent for Linear Regression
+# -------------------------------
+def gradient_descent(X, y, alpha=0.01, epochs=1000):
+    m, n = X.shape
+    theta = np.zeros(n + 1)  # Initialize theta with n + 1 elements for bias
+    X_bias = np.c_[np.ones((m, 1)), X]  # Add intercept term
+    for _ in range(epochs):
+        predictions = X_bias.dot(theta)
+        errors = predictions - y
+        gradient = (1/m) * X_bias.T.dot(errors)
+        theta -= alpha * gradient
+    return theta
+
+# Train the model using gradient descent
+theta_lasso = gradient_descent(X_train, y_train, alpha=0.01, epochs=1000)
+
+# Predict using the trained model
+def predict(X, theta):
+    X_bias = np.c_[np.ones((X.shape[0], 1)), X]
+    return X_bias.dot(theta)
+
+y_pred_lasso = predict(X_test, theta_lasso)
+
+# -------------------------------
+# Step 5: Evaluate Model
+# -------------------------------
+mse_lasso = mean_squared_error(y_test, y_pred_lasso)
+r2_lasso = r2_score(y_test, y_pred_lasso)
+
+print(f"Lasso Regression (GD) MSE    : {mse_lasso:.4f}")
+print(f"Lasso Regression (GD) R²     : {r2_lasso:.4f}")
+
+# -------------------------------
+# Step 6: 5-Fold Cross Validation (GD)
+# -------------------------------
+kf = KFold(n_splits=5, shuffle=True, random_state=42)
+cv_mse_lasso, cv_r2_lasso = [], []
+
+for train_index, val_index in kf.split(X_scaled):
+    X_ktrain, X_kval = X_scaled[train_index], X_scaled[val_index]
+    y_ktrain, y_kval = y[train_index], y[val_index]
+    
+    # Train using gradient descent
+    theta_k = gradient_descent(X_ktrain, y_ktrain, alpha=0.01, epochs=1000)
+    
+    # Evaluate the model
+    y_kval_pred = predict(X_kval, theta_k)
+    mse_k_lasso = mean_squared_error(y_kval, y_kval_pred)
+    r2_k_lasso = r2_score(y_kval, y_kval_pred)
+    
+    cv_mse_lasso.append(mse_k_lasso)
+    cv_r2_lasso.append(r2_k_lasso)
+
+print("\n========== 5-Fold Cross Validation (GD) ==========")
+print(f"Average MSE for Lasso (GD)   : {np.mean(cv_mse_lasso):.4f}")
+print(f"Average R² for Lasso (GD)    : {np.mean(cv_r2_lasso):.4f}")
+
+# -------------------------------
+# Step 7: Visualization of Predictions (First 20 Test Samples)
+# -------------------------------
+plt.figure(figsize=(8, 5))
+plt.plot(y_test[:20], label="Actual", marker='o', linestyle='dashed', color='red')
+plt.plot(y_pred_lasso[:20], label="Lasso Predicted", marker='x', linestyle='-', color='blue')
+plt.title("Lasso Predictions vs Actual (GD + Noise)")
+plt.xlabel("Sample Index")
+plt.ylabel("Predicted / Actual Value")
+plt.legend()
+plt.grid(True)
+plt.tight_layout()
+plt.show()
