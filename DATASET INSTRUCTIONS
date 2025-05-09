@@ -1,0 +1,36 @@
+✅ 1. Loading a Dataset from a URL (CSV format)
+If your dataset is in CSV format and hosted online:
+import pandas as pd
+url = "https://example.com/path/to/your-dataset.csv"  # Replace with actual URL
+df = pd.read_csv(url)
+
+
+✅ 2. Example with a Real Dataset
+For example, loading the famous Titanic dataset from GitHub:
+url = "https://raw.githubusercontent.com/datasciencedojo/datasets/master/titanic.csv"
+df = pd.read_csv(url)
+# Show top rows
+print(df.head())
+
+
+✅ 3. Preprocessing the Dataset
+Let’s assume your dataset looks like this and you want to use it in the Naive Bayes classifier:
+# Drop non-numeric or irrelevant columns (example: 'Name', 'Ticket')
+df = df.drop(['Name', 'Ticket', 'Cabin'], axis=1)
+
+# Fill missing values
+df.fillna(0, inplace=True)
+
+# Encode categorical columns if needed (e.g., 'Sex', 'Embarked')
+df['Sex'] = df['Sex'].map({'male': 0, 'female': 1})
+df['Embarked'] = df['Embarked'].map({'C': 0, 'Q': 1, 'S': 2}).fillna(0)
+
+# Split into X and y
+X = df.drop("Survived", axis=1).values
+y = df["Survived"].values
+Then, you can plug X and y directly into your existing Naive Bayes pipeline.
+
+❗ Notes:
+Make sure the dataset is public and accessible without authentication.
+
+Use print(df.columns) to inspect column names if you're unsure.
